@@ -1,0 +1,23 @@
+echo "
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+
+# VSCode
+.vscode/
+
+# Env files
+.env
+
+# Build
+dist/
+build/
+" > .gitignore
