@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'wouter';
 import { useCart } from '../utils/cart';
 import { useToast } from '@/hooks/use-toast';
@@ -8,8 +8,9 @@ const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
   const { toast } = useToast();
   const { user } = useAuth();
+  const [isAdding, setIsAdding] = useState(false);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!user) {
       toast({
         title: "Login Required",
@@ -19,11 +20,22 @@ const ProductCard = ({ product }) => {
       return; 
     }
     
-    addToCart(product, 1);
-    toast({
-      title: "Added to Cart",
-      description: `${product.name} has been added to your cart.`,
-    });
+    try {
+      setIsAdding(true);
+      await addToCart(product, 1);
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} has been added to your cart.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add item to cart",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   // Basic check for image URL validity (can be improved)
@@ -57,9 +69,9 @@ const ProductCard = ({ product }) => {
           <button 
             onClick={handleAddToCart}
             className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={product.stock === 0}
+            disabled={product.stock === 0 || isAdding}
           >
-            {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
+            {isAdding ? 'Adding...' : product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
           </button>
         </div>
       </div>

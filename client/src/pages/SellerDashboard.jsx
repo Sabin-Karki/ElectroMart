@@ -175,51 +175,106 @@ const SellerDashboard = () => {
   const queryClient = useQueryClient();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [currentProduct, setCurrentProduct] = useState(null); // For editing
+  const [currentProduct, setCurrentProduct] = useState(null);
   
   const { 
-    data: products, 
+    data: products = [], 
     isLoading, 
     error 
   } = useQuery({ 
     queryKey: ['sellerProducts', user?.id], 
     queryFn: fetchSellerProducts,
-    enabled: !!user // Only run if user is logged in
+    enabled: !!user,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 
   const addMutation = useMutation({ 
     mutationFn: addProduct,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sellerProducts'] });
-      toast({ title: "Success", description: "Product added." });
-      setIsAddModalOpen(false); // Close modal on success
+    onMutate: async (newProduct) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['sellerProducts', user?.id] });
+
+      // Snapshot the previous value
+      const previousProducts = queryClient.getQueryData(['sellerProducts', user?.id]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(['sellerProducts', user?.id], old => [...(old || []), { 
+        ...newProduct, 
+        id: 'temp-' + Date.now(),
+        isActive: true,
+        createdAt: new Date()
+      }]);
+
+      return { previousProducts };
     },
-    onError: (error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: (err, newProduct, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      queryClient.setQueryData(['sellerProducts', user?.id], context.previousProducts);
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure data is in sync
+      queryClient.invalidateQueries({ queryKey: ['sellerProducts', user?.id] });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Product added successfully." });
+      setIsAddModalOpen(false);
     }
   });
 
-  const editMutation = useMutation({ 
+  const editMutation = useMutation({
     mutationFn: editProduct,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sellerProducts'] });
-      toast({ title: "Success", description: "Product updated." });
-      setIsEditModalOpen(false); // Close modal
-      setCurrentProduct(null);
+    onMutate: async (updatedProduct) => {
+      await queryClient.cancelQueries({ queryKey: ['sellerProducts', user?.id] });
+      const previousProducts = queryClient.getQueryData(['sellerProducts', user?.id]);
+
+      queryClient.setQueryData(['sellerProducts', user?.id], old =>
+        old.map(product => product.id === updatedProduct.id ? { ...product, ...updatedProduct } : product)
+      );
+
+      return { previousProducts };
     },
-    onError: (error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: (err, updatedProduct, context) => {
+      queryClient.setQueryData(['sellerProducts', user?.id], context.previousProducts);
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['sellerProducts', user?.id] });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Product updated successfully." });
+      setIsEditModalOpen(false);
+      setCurrentProduct(null);
     }
   });
 
-  const deleteMutation = useMutation({ 
+  const deleteMutation = useMutation({
     mutationFn: deleteProduct,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sellerProducts'] });
-      toast({ title: "Success", description: "Product deleted." });
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: ['sellerProducts', user?.id] });
+      const previousProducts = queryClient.getQueryData(['sellerProducts', user?.id]);
+
+      queryClient.setQueryData(['sellerProducts', user?.id], old =>
+        old.map(product => 
+          product.id === deletedId 
+            ? { ...product, isActive: false } 
+            : product
+        )
+      );
+
+      return { previousProducts };
     },
-    onError: (error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: (err, deletedId, context) => {
+      queryClient.setQueryData(['sellerProducts', user?.id], context.previousProducts);
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['sellerProducts', user?.id] });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Product deleted successfully." });
     }
   });
 

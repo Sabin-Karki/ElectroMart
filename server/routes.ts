@@ -1,5 +1,5 @@
-import type { Express, Request, Response } from "express";
-import { createServer, type Server } from "http";
+import { Express, Request, Response } from 'express';
+import { createServer, type Server } from 'http';
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import Stripe from "stripe";
@@ -19,6 +19,15 @@ if (!STRIPE_SECRET_KEY) {
 
 // Initialize Stripe with the key
 const stripe = new Stripe(STRIPE_SECRET_KEY);
+
+// Extend Express Request type to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
+    }
+  }
+}
 
 // Default products to show if the database is empty
 const defaultProducts: Product[] = [
@@ -80,10 +89,15 @@ const defaultProducts: Product[] = [
   }
 ];
 
+// Helper to get user ID safely
+const getUserId = (req: Request): number => {
+  if (!req.user) throw new Error("User not found in request");
+  return req.user.id;
+};
+
 // Check if user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: Function) => {
-  // Use req.isAuthenticated() which is the standard Passport check
-  if (req.isAuthenticated() && req.user) { // Also check req.user exists
+  if (req.isAuthenticated() && req.user) {
     return next();
   }
   res.status(401).json({ message: "Unauthorized - Please login" });
@@ -91,15 +105,11 @@ const isAuthenticated = (req: Request, res: Response, next: Function) => {
 
 // Check if user is a seller
 const isSeller = (req: Request, res: Response, next: Function) => {
-  // First, ensure authenticated and user exists
   if (!req.isAuthenticated() || !req.user) {
     return res.status(401).json({ message: "Unauthorized - Please login" });
   }
   
-  // Now we know req.user exists, assert its type
-  const user = req.user as User; 
-
-  if (user.role === "seller") {
+  if (req.user.role === "seller") {
     return next();
   }
   res.status(403).json({ message: "Forbidden - Seller access required" });
@@ -245,9 +255,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Cart routes
   app.get("/api/cart", isAuthenticated, async (req, res) => {
-    if (!req.user) return res.status(401).json({ message: "User not found in request" });
     try {
-      const cartItems = await storage.getCartItems(req.user.id);
+      const userId = getUserId(req);
+      const cartItems = await storage.getCartItems(userId);
       
       // Get full product details for each cart item
       const cartWithProducts = await Promise.all(
@@ -270,8 +280,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/cart", isAuthenticated, async (req, res) => {
-    if (!req.user) return res.status(401).json({ message: "User not found in request" });
     try {
+      const userId = getUserId(req);
       // Basic validation
       const { productId, quantity } = req.body;
       if (!productId || !quantity || quantity < 1) {
@@ -281,7 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cartItemData = {
         productId: parseInt(productId),
         quantity: parseInt(quantity),
-        userId: req.user.id 
+        userId: userId 
       };
       
       // Check if product exists and has enough stock
@@ -312,31 +322,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.put("/api/cart/:id", isAuthenticated, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "User not found in request" });
     try {
       const id = parseInt(req.params.id);
       const { quantity } = req.body;
+      const userId = getUserId(req);
       
       if (!quantity || quantity < 1) {
         return res.status(400).json({ message: "Quantity must be at least 1" });
       }
       
-      const cartItem = await storage.updateCartItem(id, quantity);
+      // Get the cart item first to verify ownership
+      const cartItems = await storage.getCartItems(userId);
+      const cartItem = cartItems.find(item => item.id === id);
       
       if (!cartItem) {
         return res.status(404).json({ message: "Cart item not found" });
       }
       
-      const product = await storage.getProduct(cartItem.productId);
+      const updatedCartItem = await storage.updateCartItem(id, quantity);
+      
+      if (!updatedCartItem) {
+        return res.status(404).json({ message: "Failed to update cart item" });
+      }
+      
+      const product = await storage.getProduct(updatedCartItem.productId);
       
       const cartItemWithProduct = {
-        id: cartItem.id,
-        productId: cartItem.productId,
-        quantity: cartItem.quantity,
+        id: updatedCartItem.id,
+        productId: updatedCartItem.productId,
+        quantity: updatedCartItem.quantity,
         product: product
       };
       
       res.json(cartItemWithProduct);
     } catch (error) {
+      console.error("Error updating cart item:", error);
       res.status(500).json({ message: "Error updating cart item" });
     }
   });
@@ -357,7 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/cart", isAuthenticated, async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "User not found in request" });
     try {
-      await storage.clearCart(req.user.id);
+      await storage.clearCart(getUserId(req));
       res.status(204).send();
     } catch (error) {
       console.error("Error clearing cart:", error);
@@ -369,7 +390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/orders", isAuthenticated, async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "User not found in request" });
     try {
-      const orders = await storage.getOrdersByUser(req.user.id);
+      const orders = await storage.getOrdersByUser(getUserId(req));
       
       // Get order items for each order
       const ordersWithItems = await Promise.all(
@@ -398,7 +419,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
-      if (order.userId !== req.user.id) {
+      if (order.userId !== getUserId(req)) {
         return res.status(403).json({ message: "Permission denied" });
       }
       
@@ -427,7 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: Math.round(numericAmount * 100), // Convert to cents
         currency: "usd",
         metadata: {
-          userId: req.user.id.toString(),
+          userId: getUserId(req).toString(),
           orderId: orderId ? orderId.toString() : undefined
         }
       });
@@ -464,7 +485,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get cart items for the specific user 
-      const cartItems = await storage.getCartItems(req.user.id); 
+      const userId = getUserId(req);
+      const cartItems = await storage.getCartItems(userId); 
       
       if (cartItems.length === 0) {
         return res.status(400).json({ message: "Cart is empty" });
@@ -501,7 +523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
       // Create order in DB
       const order = await storage.createOrder({
-        userId: req.user.id, // Use the checked userId
+        userId: getUserId(req), // Use the checked userId
         totalAmount: totalAmount.toFixed(2), 
         shippingAddress,
         status: 'processing',
@@ -522,7 +544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
         
       // Clear cart for the specific user
-      await storage.clearCart(req.user.id); 
+      await storage.clearCart(userId); 
       
       res.status(201).json({ 
         message: "Order created successfully (payment not implemented)", 
