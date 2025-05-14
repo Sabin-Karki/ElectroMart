@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from "wouter";
 import { useAuth } from "../utils/auth";
@@ -85,6 +85,7 @@ const ProductForm = ({ initialData = {}, onSubmit, isLoading, submitText = "Subm
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
+    // Handle image preview separately
     if (name === 'imageUrl') {
       if (value && (value.startsWith('http://') || value.startsWith('https://'))) {
         setImagePreview(value);
@@ -95,7 +96,7 @@ const ProductForm = ({ initialData = {}, onSubmit, isLoading, submitText = "Subm
   };
   
   const handleSelectChange = (value) => {
-      setFormData(prev => ({ ...prev, category: value }));
+    setFormData(prev => ({ ...prev, category: value }));
   };
 
   const handleSubmit = (e) => {
@@ -176,6 +177,15 @@ const SellerDashboard = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState(null);
+  
+  const emptyProductFormInitialData = useMemo(() => ({
+    name: '',
+    description: '',
+    price: '',
+    category: '',
+    stock: '',
+    imageUrl: ''
+  }), []);
   
   const { 
     data: products = [], 
@@ -372,6 +382,7 @@ const SellerDashboard = () => {
                <DialogTitle>Add New Product</DialogTitle>
              </DialogHeader>
              <ProductForm 
+                initialData={emptyProductFormInitialData}
                 onSubmit={(data) => addMutation.mutate(data)} 
                 isLoading={addMutation.isLoading}
                 submitText="Add Product"
