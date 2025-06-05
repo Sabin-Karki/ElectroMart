@@ -14,8 +14,12 @@ const Home = () => {
   // Categories with icons
   const categories = [
     { name: "Laptops", icon: "fas fa-laptop" },
-    { name: "Smartphones", icon: "fas fa-mobile-alt" },
+    { name: "Phones", icon: "fas fa-mobile-alt" },
     { name: "Audio", icon: "fas fa-headphones" },
+    { name: "Monitors", icon: "fas fa-desktop" },
+    { name: "Storage", icon: "fas fa-hdd" },
+    { name: "Accessories", icon: "fas fa-keyboard" },
+    { name: "Wearables", icon: "fas fa-watch" },
     { name: "Gaming", icon: "fas fa-gamepad" }
   ];
   
@@ -59,7 +63,7 @@ const Home = () => {
                 <Link href="/products" className="bg-white text-primary font-medium py-3 px-6 rounded-lg hover:bg-gray-100 transition text-center">
                   Shop Now
                 </Link>
-                <a href="#" className="bg-transparent border border-white text-white font-medium py-3 px-6 rounded-lg hover:bg-white hover:text-blue-700 transition text-center">Learn More</a>
+                <Link href="/about-us" className="bg-transparent border border-white text-white font-medium py-3 px-6 rounded-lg hover:bg-white hover:text-blue-700 transition text-center">Learn More</Link>
               </div>
             </div>
             <div className="md:w-1/2 flex justify-center">

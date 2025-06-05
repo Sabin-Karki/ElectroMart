@@ -23,6 +23,8 @@ import ProductDetail from "./pages/ProductDetail.jsx";
 import FAQ from "./pages/FAQ.jsx";
 import ContactUs from "./pages/ContactUs.jsx";
 import ShippingPolicy from "./pages/ShippingPolicy.jsx";
+import ReturnsRefunds from "./pages/ReturnsRefunds.jsx";
+import AboutUs from "./pages/AboutUs.jsx";
 
 // Protected Route Component that checks both authentication and role
 const ProtectedRoute = ({ component: Component, roles, ...rest }: any) => {
@@ -83,6 +85,8 @@ export function App() {
                 </Route>
                 <Route path="/products/:id" component={ProductDetail} />
                 <Route path="/products" component={ProductListing} />
+                <Route path="/about-us" component={AboutUs} />
+                <Route path="/returns-refunds" component={ReturnsRefunds} />
                 <Route path="/checkout">
                   <ProtectedRoute component={Checkout} roles={["buyer", "seller"]} />
                 </Route>
