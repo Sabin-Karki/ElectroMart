@@ -47,10 +47,12 @@ const getStatusBadgeClass = (status) => {
     case "processing":
     case "pending":
       return "bg-yellow-100 text-yellow-800";
+    case "paid":
+    case "completed":
+      return "bg-green-100 text-green-800";
     case "shipped":
       return "bg-blue-100 text-blue-800";
     case "delivered":
-    case "completed": // Assuming completed might be used
       return "bg-green-100 text-green-800";
     case "cancelled":
       return "bg-red-100 text-red-800";

@@ -111,7 +111,16 @@ const Checkout = () => {
         // Redirect to complete Stripe payment
         initiateStripePayment(paymentData.clientSecret);
       } else {
-        // For direct payment (COD)
+        // For direct payment (COD), mark order as paid
+        try {
+          await apiRequest("POST", "/api/confirm-payment", {
+            orderId: newOrderId,
+            paymentIntentId: null
+          });
+        } catch (err) {
+          // Even if this fails, continue to confirmation
+          console.error("COD payment confirmation failed", err);
+        }
         setStep(CONFIRMATION_STEP);
         clearCart();
       }
@@ -158,12 +167,28 @@ const Checkout = () => {
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Payment Successful",
-        description: "Your payment has been processed successfully.",
-      });
-      setStep(CONFIRMATION_STEP);
-      clearCart();
+      // Confirm payment with backend
+      try {
+        await apiRequest("POST", "/api/confirm-payment", {
+          orderId: orderId,
+          paymentIntentId: clientSecret
+        });
+        
+        toast({
+          title: "Payment Successful",
+          description: "Your payment has been processed successfully.",
+        });
+        setStep(CONFIRMATION_STEP);
+        clearCart();
+      } catch (confirmError) {
+        console.error("Error confirming payment:", confirmError);
+        toast({
+          title: "Payment Processed",
+          description: "Payment was successful but there was an issue updating the order status. Please contact support.",
+        });
+        setStep(CONFIRMATION_STEP);
+        clearCart();
+      }
     }
   };
   

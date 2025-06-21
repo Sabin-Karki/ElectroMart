@@ -530,10 +530,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderDate: new Date()
       });
       
-      // Create order items in DB
+      // Create order items in DB and update product stock
       await Promise.all(
         cartItems.map(async (item) => {
           const product = await storage.getProduct(item.productId);
+          
+          // Reduce product stock
+          const newStock = product!.stock - item.quantity;
+          await storage.updateProduct(item.productId, { stock: newStock });
+          
           return storage.createOrderItem({
             orderId: order.id,
             productId: item.productId,
@@ -556,6 +561,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Checkout error:", error);
       const message = error instanceof Error ? error.message : "Checkout failed";
       res.status(500).json({ message });
+    }
+  });
+
+  // Payment confirmation route
+  app.post("/api/confirm-payment", isAuthenticated, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "User not authenticated" });
+    
+    try {
+      const { orderId, paymentIntentId } = req.body;
+      
+      if (!orderId) {
+        return res.status(400).json({ message: "Order ID is required" });
+      }
+      
+      const order = await storage.getOrder(parseInt(orderId));
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      if (order.userId !== getUserId(req)) {
+        return res.status(403).json({ message: "Permission denied" });
+      }
+      
+      // Update order status to "paid" when payment is confirmed
+      const updatedOrder = await storage.updateOrderStatus(parseInt(orderId), "paid");
+      
+      res.json({ 
+        message: "Payment confirmed successfully", 
+        order: updatedOrder 
+      });
+      
+    } catch (error) {
+      console.error("Payment confirmation error:", error);
+      res.status(500).json({ message: "Error confirming payment" });
     }
   });
 

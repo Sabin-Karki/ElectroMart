@@ -19,7 +19,7 @@ const Home = () => {
     { name: "Monitors", icon: "fas fa-desktop" },
     { name: "Storage", icon: "fas fa-hdd" },
     { name: "Accessories", icon: "fas fa-keyboard" },
-    { name: "Wearables", icon: "fas fa-watch" },
+    { name: "Wearables", icon: "fas fa-smartwatch" },
     { name: "Gaming", icon: "fas fa-gamepad" }
   ];
   
